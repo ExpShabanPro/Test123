@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D P2P LAN Shooter</title>
+    <title>3D P2P LAN Shooter - First Person</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -15,9 +15,22 @@
         #chat-box { height: 120px; overflow-y: auto; background: rgba(0,0,0,0.5); color: white; padding: 5px; font-size: 12px; }
         .hp-bar-bg { width: 100%; height: 10px; background: #444; border-radius: 5px; overflow: hidden; }
         #hp-bar-fill { height: 100%; width: 100%; background: #ff4444; transition: width 0.2s; }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 10px;
+            height: 10px;
+            border: 2px solid white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
+
+    <div id="crosshair"></div>
 
     <div id="ui-layer" class="flex flex-col justify-between p-4">
         <!-- Connection UI -->
@@ -111,7 +124,7 @@
             head.position.set(0, 1.5, -0.4);
             group.add(head);
 
-            // Simple name tag placeholder / Health Bar over head
+            // Health Bar over head
             const hpBg = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.1), new THREE.MeshBasicMaterial({ color: 0x333333 }));
             hpBg.position.set(0, 2.5, 0);
             group.add(hpBg);
@@ -133,6 +146,8 @@
             health: 100,
             maxHealth: 100
         };
+        // Hide local player mesh from first person view
+        localPlayer.mesh.visible = false;
         scene.add(localPlayer.mesh);
 
         // --- INPUT HANDLING ---
@@ -245,7 +260,6 @@
             if (players.remote && players.remote.mesh.hpFill) {
                 const perc = Math.max(0, players.remote.health / 100);
                 players.remote.mesh.hpFill.scale.x = perc;
-                // Offset position because scaling is from center
                 players.remote.mesh.hpFill.position.x = (perc - 1) * 0.5;
             }
         }
@@ -272,11 +286,13 @@
             if (now - lastFireTime < gun.rate) return;
             
             lastFireTime = now;
-            const spawnPos = localPlayer.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0));
+            // Spawn bullet exactly at camera center
+            const spawnPos = camera.position.clone();
 
             for (let i = 0; i < gun.count; i++) {
                 const baseDir = new THREE.Vector3(0, 0, -1);
-                baseDir.applyEuler(new THREE.Euler(localPlayer.rotationX, localPlayer.rotationY, 0));
+                // Direction from camera perspective
+                baseDir.applyQuaternion(camera.quaternion);
                 
                 baseDir.x += (Math.random() - 0.5) * gun.spread;
                 baseDir.y += (Math.random() - 0.5) * gun.spread;
@@ -300,13 +316,15 @@
                              document.activeElement === document.getElementById('username');
 
             if (!isTyping) {
+                // Look Controls (Arrows)
                 if (keys['ArrowLeft']) localPlayer.rotationY += 0.05;
                 if (keys['ArrowRight']) localPlayer.rotationY -= 0.05;
-                if (keys['ArrowUp']) localPlayer.rotationX = Math.max(-0.8, localPlayer.rotationX - 0.04);
-                if (keys['ArrowDown']) localPlayer.rotationX = Math.min(0.8, localPlayer.rotationX + 0.04);
+                if (keys['ArrowUp']) localPlayer.rotationX = Math.max(-1.5, localPlayer.rotationX - 0.04);
+                if (keys['ArrowDown']) localPlayer.rotationX = Math.min(1.5, localPlayer.rotationX + 0.04);
 
                 localPlayer.mesh.rotation.y = localPlayer.rotationY;
 
+                // Move Controls (WASD)
                 const moveVec = new THREE.Vector3();
                 if (keys['KeyW']) moveVec.z -= 0.15;
                 if (keys['KeyS']) moveVec.z += 0.15;
@@ -322,7 +340,7 @@
 
                 if (keys['ShiftLeft'] || keys['KeyF']) shoot();
 
-                if (moveVec.lengthSq() > 0 || !localPlayer.isGrounded || keys['ArrowLeft'] || keys['ArrowRight']) {
+                if (moveVec.lengthSq() > 0 || !localPlayer.isGrounded || keys['ArrowLeft'] || keys['ArrowRight'] || keys['ArrowUp'] || keys['ArrowDown']) {
                     sendData({ type: 'move', pos: localPlayer.mesh.position, rot: localPlayer.mesh.rotation.y });
                 }
             }
@@ -337,11 +355,16 @@
                 localPlayer.isGrounded = true;
             }
 
-            // Camera
-            const camOffset = new THREE.Vector3(0, 2.5, 6);
-            camOffset.applyEuler(new THREE.Euler(localPlayer.rotationX, localPlayer.rotationY, 0));
-            camera.position.copy(localPlayer.mesh.position).add(camOffset);
-            camera.lookAt(localPlayer.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0)));
+            // First Person Camera Positioning
+            // Position camera at head level (roughly 1.6 units high)
+            camera.position.set(
+                localPlayer.mesh.position.x,
+                localPlayer.mesh.position.y + 1.7, 
+                localPlayer.mesh.position.z
+            );
+            
+            // Set camera rotation based on look state
+            camera.rotation.set(localPlayer.rotationX, localPlayer.rotationY, 0, 'YXZ');
 
             // Update Bullets & Collision
             for (let i = bullets.length - 1; i >= 0; i--) {
@@ -349,12 +372,11 @@
                 b.mesh.position.add(b.dir);
                 b.life--;
 
-                // If my bullet hits the enemy
                 if (b.isOwner && players.remote) {
                     const enemyPos = players.remote.mesh.position.clone().add(new THREE.Vector3(0, 1, 0));
                     if (b.mesh.position.distanceTo(enemyPos) < 1.2) {
                         sendData({ type: 'hit', damage: b.damage });
-                        b.life = 0; // Destroy bullet
+                        b.life = 0;
                     }
                 }
 
@@ -364,7 +386,7 @@
                 }
             }
 
-            // Make remote health bars look at camera
+            // Billboard effect for remote health bars
             if (players.remote) {
                 players.remote.mesh.children.forEach(child => {
                     if (child.isMesh && child.geometry.type === 'PlaneGeometry') {
