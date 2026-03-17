@@ -1,108 +1,251 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>P2P LAN Chat</title>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D P2P LAN Shooter</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-      body {
-        font-family: sans-serif;
-        display: flex;
-        flex-direction: column;
-        height: 90vh;
-        padding: 20px;
-      }
-      #chat {
-        flex-grow: 1;
-        border: 1px solid #ccc;
-        overflow-y: scroll;
-        margin-bottom: 10px;
-        padding: 10px;
-      }
-      .controls {
-        display: flex;
-        gap: 10px;
-        margin-bottom: 10px;
-      }
-      input {
-        padding: 8px;
-      }
-      #message {
-        flex-grow: 1;
-      }
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        canvas { display: block; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        .interactive { pointer-events: auto; }
+        #chat-box { height: 150px; overflow-y: auto; background: rgba(0,0,0,0.5); color: white; padding: 5px; font-size: 12px; }
     </style>
-  </head>
-  <body>
-    <h2>P2P Static Chat</h2>
+</head>
+<body>
 
-    <div class="controls">
-      <strong>Your ID:</strong> <span id="my-id">...</span>
-    </div>
+    <div id="ui-layer" class="flex flex-col justify-between p-4">
+        <!-- Connection UI -->
+        <div class="bg-black/60 p-4 rounded-lg text-white w-80 interactive">
+            <h2 class="font-bold border-b border-white/20 mb-2">Multiplayer Lobby</h2>
+            <div class="mb-2 text-sm">Your ID: <span id="my-id" class="font-mono text-yellow-400 text-xs">Connecting...</span></div>
+            <div class="flex gap-2">
+                <input id="dest-id" type="text" placeholder="Paste Peer ID" class="bg-gray-800 border border-gray-600 px-2 py-1 text-xs flex-1 rounded">
+                <button onclick="connectToPeer()" class="bg-blue-600 hover:bg-blue-500 px-3 py-1 text-xs rounded">Connect</button>
+            </div>
+            <div id="status" class="text-[10px] mt-1 text-gray-400">Waiting for connection...</div>
+        </div>
 
-    <div class="controls">
-      <input type="text" id="dest-id" placeholder="Paste Friend's ID here" />
-      <button onclick="connectToPeer()">Connect</button>
-    </div>
-
-    <div id="chat"></div>
-
-    <div class="controls">
-      <input type="text" id="message" placeholder="Type a message..." />
-      <button onclick="sendMessage()">Send</button>
+        <!-- Chat and Controls -->
+        <div class="flex justify-between items-end">
+            <div class="w-64 interactive">
+                <div id="chat-box" class="rounded-t-lg"></div>
+                <input id="chat-input" type="text" placeholder="Press Enter to chat..." class="w-full bg-black/80 text-white border-none p-2 text-sm rounded-b-lg">
+            </div>
+            <div class="text-white text-right text-xs bg-black/40 p-2 rounded">
+                WASD: Move | Arrows: Look | Space: Shoot
+            </div>
+        </div>
     </div>
 
     <script>
-      const chatBox = document.getElementById('chat');
-      const messageInput = document.getElementById('message');
-      const destInput = document.getElementById('dest-id');
-      let peer = new Peer(); // Generates a random ID
-      let conn;
+        // --- GAME CONFIG & STATE ---
+        const players = {};
+        const bullets = [];
+        let myId = null;
+        let conn = null;
+        let isHost = false;
 
-      // 1. Display your ID so you can share it
-      peer.on('open', (id) => {
-        document.getElementById('my-id').innerText = id;
-      });
+        // --- THREE.JS SETUP ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x111122);
+        scene.fog = new THREE.Fog(0x111122, 10, 50);
 
-      // 2. Listen for incoming connections
-      peer.on('connection', (connection) => {
-        conn = connection;
-        setupChat();
-      });
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
 
-      // 3. Connect to a friend
-      function connectToPeer() {
-        const peerId = destInput.value;
-        conn = peer.connect(peerId);
-        setupChat();
-      }
+        // Lighting
+        const light = new THREE.HemisphereLight(0xeeeeff, 0x444422, 1);
+        scene.add(light);
 
-      // 4. Handle sending/receiving
-      function setupChat() {
-        conn.on('open', () => {
-          appendMessage('<i>System: Connected!</i>');
+        // Floor
+        const grid = new THREE.GridHelper(100, 50, 0x444444, 0x222222);
+        scene.add(grid);
 
-          conn.on('data', (data) => {
-            appendMessage('<b>Peer:</b> ' + data);
-          });
-        });
-      }
-
-      function sendMessage() {
-        const msg = messageInput.value;
-        if (conn && conn.open) {
-          conn.send(msg);
-          appendMessage('<b>You:</b> ' + msg);
-          messageInput.value = '';
-        } else {
-          alert('Not connected to anyone!');
+        // --- PLAYER LOGIC ---
+        function createPlayerMesh(color = 0x00ff00) {
+            const group = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshPhongMaterial({ color }));
+            body.position.y = 1;
+            group.add(body);
+            // "Head" to show direction
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshPhongMaterial({ color: 0xffffff }));
+            head.position.set(0, 1.5, -0.4);
+            group.add(head);
+            return group;
         }
-      }
 
-      function appendMessage(html) {
-        chatBox.innerHTML += '<div>' + html + '</div>';
-        chatBox.scrollTop = chatBox.scrollHeight;
-      }
+        const localPlayer = {
+            mesh: createPlayerMesh(0x3366ff),
+            velocity: new THREE.Vector3(),
+            rotationY: 0,
+            rotationX: 0
+        };
+        scene.add(localPlayer.mesh);
+
+        // --- INPUT HANDLING ---
+        const keys = {};
+        window.addEventListener('keydown', e => {
+            keys[e.code] = true;
+            if (e.code === 'Enter') {
+                const input = document.getElementById('chat-input');
+                if (document.activeElement === input) {
+                    if (input.value) {
+                        sendData({ type: 'chat', text: input.value });
+                        addChatMessage("You", input.value);
+                        input.value = '';
+                    }
+                    input.blur();
+                } else {
+                    input.focus();
+                }
+            }
+            if (e.code === 'Space' && document.activeElement !== document.getElementById('chat-input')) {
+                spawnBullet(localPlayer.mesh.position, localPlayer.mesh.rotation);
+                sendData({ type: 'shoot', pos: localPlayer.mesh.position, rot: localPlayer.mesh.rotation.y });
+            }
+        });
+        window.addEventListener('keyup', e => keys[e.code] = false);
+
+        // --- NETWORKING (PEERJS) ---
+        const peer = new Peer();
+        peer.on('open', id => {
+            myId = id;
+            document.getElementById('my-id').innerText = id;
+        });
+
+        // Receiving Connection
+        peer.on('connection', c => {
+            conn = c;
+            isHost = true;
+            setupConnection();
+        });
+
+        // Initiating Connection
+        function connectToPeer() {
+            const destId = document.getElementById('dest-id').value;
+            if (!destId) return;
+            conn = peer.connect(destId);
+            isHost = false;
+            setupConnection();
+        }
+
+        function setupConnection() {
+            conn.on('open', () => {
+                document.getElementById('status').innerText = "Connected to Peer!";
+                document.getElementById('status').classList.add('text-green-400');
+                
+                // Create representation for remote player
+                players.remote = { mesh: createPlayerMesh(0xff3333) };
+                scene.add(players.remote.mesh);
+            });
+
+            conn.on('data', data => {
+                if (data.type === 'move') {
+                    if (players.remote) {
+                        players.remote.mesh.position.set(data.pos.x, data.pos.y, data.pos.z);
+                        players.remote.mesh.rotation.y = data.rot;
+                    }
+                } else if (data.type === 'shoot') {
+                    spawnBullet(data.pos, { y: data.rot }, true);
+                } else if (data.type === 'chat') {
+                    addChatMessage("Peer", data.text);
+                }
+            });
+        }
+
+        function sendData(data) {
+            if (conn && conn.open) conn.send(data);
+        }
+
+        // --- BULLET LOGIC ---
+        function spawnBullet(pos, rot, isRemote = false) {
+            const bullet = new THREE.Mesh(
+                new THREE.SphereGeometry(0.1), 
+                new THREE.MeshBasicMaterial({ color: isRemote ? 0xff0000 : 0xffff00 })
+            );
+            bullet.position.copy(pos);
+            bullet.position.y += 1.5; // Fire from head height
+            
+            const direction = new THREE.Vector3(0, 0, -1);
+            direction.applyEuler(new THREE.Euler(0, rot.y, 0));
+            
+            bullets.push({ mesh: bullet, dir: direction, life: 100 });
+            scene.add(bullet);
+        }
+
+        function addChatMessage(sender, text) {
+            const box = document.getElementById('chat-box');
+            box.innerHTML += `<div><span class="font-bold">${sender}:</span> ${text}</div>`;
+            box.scrollTop = box.scrollHeight;
+        }
+
+        // --- GAME LOOP ---
+        function update() {
+            // Only move if not typing
+            if (document.activeElement !== document.getElementById('chat-input')) {
+                // Rotation (Arrow Keys)
+                if (keys['ArrowLeft']) localPlayer.rotationY += 0.05;
+                if (keys['ArrowRight']) localPlayer.rotationY -= 0.05;
+                if (keys['ArrowUp']) localPlayer.rotationX = Math.max(-0.5, localPlayer.rotationX - 0.02);
+                if (keys['ArrowDown']) localPlayer.rotationX = Math.min(0.5, localPlayer.rotationX + 0.02);
+
+                localPlayer.mesh.rotation.y = localPlayer.rotationY;
+
+                // Movement (WASD)
+                const moveVec = new THREE.Vector3();
+                if (keys['KeyW']) moveVec.z -= 0.1;
+                if (keys['KeyS']) moveVec.z += 0.1;
+                if (keys['KeyA']) moveVec.x -= 0.1;
+                if (keys['KeyD']) moveVec.x += 0.1;
+
+                moveVec.applyEuler(new THREE.Euler(0, localPlayer.rotationY, 0));
+                localPlayer.mesh.position.add(moveVec);
+
+                // Send position to peer
+                if (moveVec.lengthSq() > 0 || keys['ArrowLeft'] || keys['ArrowRight']) {
+                    sendData({ 
+                        type: 'move', 
+                        pos: localPlayer.mesh.position, 
+                        rot: localPlayer.mesh.rotation.y 
+                    });
+                }
+            }
+
+            // Camera follow
+            const camOffset = new THREE.Vector3(0, 2, 5);
+            camOffset.applyEuler(new THREE.Euler(localPlayer.rotationX, localPlayer.rotationY, 0));
+            camera.position.copy(localPlayer.mesh.position).add(camOffset);
+            camera.lookAt(localPlayer.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0)));
+
+            // Update Bullets
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const b = bullets[i];
+                b.mesh.position.add(b.dir.clone().multiplyScalar(0.5));
+                b.life--;
+                if (b.life <= 0) {
+                    scene.remove(b.mesh);
+                    bullets.splice(i, 1);
+                }
+            }
+
+            renderer.render(scene, camera);
+            requestAnimationFrame(update);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Start game
+        update();
     </script>
-  </body>
+</body>
 </html>
