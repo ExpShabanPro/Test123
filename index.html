@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple Voice Call</title>
+    <title>Voice & Chat App</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -14,63 +14,104 @@
             0%, 100% { opacity: 1; }
             50% { opacity: .5; }
         }
+        #chat-messages::-webkit-scrollbar {
+            width: 4px;
+        }
+        #chat-messages::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen flex items-center justify-center p-4 font-sans">
 
-    <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-100">
-        <header class="text-center mb-8">
-            <h1 class="text-3xl font-bold text-slate-800 mb-2">Voice Call</h1>
-            <p class="text-slate-500 text-sm">Peer-to-peer audio connection</p>
+    <div class="bg-white p-6 rounded-2xl shadow-xl w-full max-w-md border border-slate-100 flex flex-col h-[600px]">
+        <header class="text-center mb-4">
+            <h1 class="text-2xl font-bold text-slate-800">Connect</h1>
+            <p class="text-slate-500 text-xs">Voice & Messaging</p>
         </header>
 
-        <!-- Connection Status -->
-        <div id="status-container" class="mb-6 p-4 rounded-lg bg-slate-100 flex items-center gap-3">
-            <div id="status-dot" class="w-3 h-3 rounded-full bg-yellow-400"></div>
-            <span id="status-text" class="text-sm font-medium text-slate-700">Connecting to server...</span>
-        </div>
+        <!-- Status & ID -->
+        <div class="space-y-3 mb-4">
+            <div id="status-container" class="p-2 px-3 rounded-lg bg-slate-100 flex items-center gap-2">
+                <div id="status-dot" class="w-2 h-2 rounded-full bg-yellow-400"></div>
+                <span id="status-text" class="text-xs font-medium text-slate-600 tracking-tight text-ellipsis overflow-hidden whitespace-nowrap">Connecting...</span>
+            </div>
 
-        <!-- My ID Section -->
-        <div class="mb-8">
-            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Your 4-Digit ID</label>
             <div class="flex gap-2">
-                <input type="text" id="my-id" readonly 
-                    class="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-mono text-2xl font-bold text-center focus:outline-none" 
-                    placeholder="....">
-                <button onclick="copyId()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg transition-colors text-sm font-medium">
+                <div class="flex-1">
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Your ID</label>
+                    <input type="text" id="my-id" readonly 
+                        class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-mono text-xl font-bold text-center focus:outline-none" 
+                        placeholder="....">
+                </div>
+                <button onclick="copyId()" class="self-end px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg transition-colors text-xs font-medium mb-[2px]">
                     Copy
                 </button>
             </div>
         </div>
 
-        <!-- Call Actions -->
-        <div class="space-y-4">
-            <div>
-                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Call Someone</label>
-                <div class="flex gap-2">
-                    <input type="number" id="peer-id" 
-                        class="flex-1 p-3 border border-slate-200 rounded-lg text-slate-700 text-xl font-bold text-center focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all" 
-                        placeholder="0000" maxlength="4">
-                    <button id="call-btn" onclick="startCall()" 
-                        class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:pointer-events-none font-bold">
-                        Call
+        <!-- Mode Selector -->
+        <div id="setup-ui" class="space-y-4 flex-1 flex flex-col justify-center">
+            <div class="space-y-3">
+                <label class="block text-xs font-semibold text-slate-400 uppercase text-center">Enter Peer ID to Connect</label>
+                <input type="number" id="peer-id" 
+                    class="w-full p-3 border border-slate-200 rounded-xl text-slate-700 text-2xl font-bold text-center focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all" 
+                    placeholder="0000">
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <button onclick="startCall()" 
+                        class="flex flex-col items-center justify-center gap-2 p-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all shadow-md active:scale-95">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                        </svg>
+                        <span class="font-bold text-sm">Voice Call</span>
+                    </button>
+                    <button onclick="startChat()" 
+                        class="flex flex-col items-center justify-center gap-2 p-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all shadow-md active:scale-95">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                        </svg>
+                        <span class="font-bold text-sm">Text Chat</span>
                     </button>
                 </div>
             </div>
+        </div>
 
-            <!-- Active Call UI -->
-            <div id="active-call" class="hidden pt-6 border-t border-slate-100">
-                <div class="flex flex-col items-center text-center">
-                    <div class="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mb-4 status-pulse">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                        </svg>
-                    </div>
-                    <p class="text-slate-800 font-semibold mb-1">In Call</p>
-                    <button onclick="endCall()" class="mt-4 px-8 py-2 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg active:scale-95">
-                        End Call
-                    </button>
-                </div>
+        <!-- Voice Call UI -->
+        <div id="voice-ui" class="hidden flex-1 flex flex-col items-center justify-center space-y-6">
+            <div class="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center status-pulse">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
+            </div>
+            <div class="text-center">
+                <p class="text-slate-800 font-bold text-lg">In Voice Call</p>
+                <p id="call-peer-display" class="text-slate-500 text-sm">Connected</p>
+            </div>
+            <button onclick="endSession()" class="px-10 py-3 bg-red-500 hover:bg-red-600 text-white rounded-full font-bold transition-all shadow-lg active:scale-95">
+                End Call
+            </button>
+        </div>
+
+        <!-- Chat UI -->
+        <div id="chat-ui" class="hidden flex-1 flex flex-col h-full overflow-hidden">
+            <div class="flex justify-between items-center pb-2 border-b border-slate-100 mb-2">
+                <span class="text-xs font-bold text-slate-400 uppercase">Chat Session</span>
+                <button onclick="endSession()" class="text-xs text-red-500 font-bold hover:underline">Exit</button>
+            </div>
+            <div id="chat-messages" class="flex-1 overflow-y-auto space-y-2 mb-3 p-1">
+                <!-- Messages appear here -->
+            </div>
+            <div class="flex gap-2">
+                <input type="text" id="chat-input" 
+                    class="flex-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" 
+                    placeholder="Type message...">
+                <button onclick="sendMessage()" class="p-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                    </svg>
+                </button>
             </div>
         </div>
 
@@ -78,43 +119,58 @@
         <audio id="remote-audio" autoplay class="hidden"></audio>
     </div>
 
-    <!-- Notification Overlay -->
-    <div id="notification" class="fixed bottom-10 left-1/2 -translate-x-1/2 px-6 py-3 bg-slate-800 text-white rounded-full text-sm opacity-0 transition-opacity pointer-events-none shadow-2xl">
+    <!-- Notification -->
+    <div id="notification" class="fixed bottom-10 left-1/2 -translate-x-1/2 px-6 py-3 bg-slate-800 text-white rounded-full text-sm opacity-0 transition-opacity pointer-events-none shadow-2xl z-50">
         ID Copied!
     </div>
 
     <script>
         let peer;
         let currentCall;
+        let currentConn;
         let localStream;
 
-        const myIdInput = document.getElementById('my-id');
-        const peerIdInput = document.getElementById('peer-id');
-        const callBtn = document.getElementById('call-btn');
-        const activeCallDiv = document.getElementById('active-call');
-        const remoteAudio = document.getElementById('remote-audio');
-        const statusDot = document.getElementById('status-dot');
-        const statusText = document.getElementById('status-text');
+        const elements = {
+            myId: document.getElementById('my-id'),
+            peerId: document.getElementById('peer-id'),
+            setupUI: document.getElementById('setup-ui'),
+            voiceUI: document.getElementById('voice-ui'),
+            chatUI: document.getElementById('chat-ui'),
+            messages: document.getElementById('chat-messages'),
+            chatInput: document.getElementById('chat-input'),
+            remoteAudio: document.getElementById('remote-audio'),
+            statusDot: document.getElementById('status-dot'),
+            statusText: document.getElementById('status-text')
+        };
 
-        // Function to generate a simple 4-digit ID
         function generateShortId() {
             return Math.floor(1000 + Math.random() * 9000).toString();
         }
 
-        // Initialize PeerJS
         function init() {
             const shortId = generateShortId();
-            // We pass the shortId to the constructor
             peer = new Peer(shortId);
 
             peer.on('open', (id) => {
-                myIdInput.value = id;
-                updateStatus('online', 'Ready for calls');
+                elements.myId.value = id;
+                updateStatus('online', 'Ready to connect');
             });
 
+            // Handle Incoming Data (Chat)
+            peer.on('connection', (conn) => {
+                const accept = confirm(`Incoming chat request from ${conn.peer}. Accept?`);
+                if (accept) {
+                    setupChatHandlers(conn);
+                    showUI('chat');
+                } else {
+                    conn.close();
+                }
+            });
+
+            // Handle Incoming Call (Voice)
             peer.on('call', (call) => {
-                const confirmCall = confirm("Incoming voice call! Accept?");
-                if (confirmCall) {
+                const accept = confirm(`Incoming voice call from ${call.peer}. Accept?`);
+                if (accept) {
                     answerCall(call);
                 } else {
                     call.close();
@@ -122,35 +178,32 @@
             });
 
             peer.on('error', (err) => {
-                // If ID is taken, try another one
-                if (err.type === 'unavailable-id') {
-                    init(); 
-                } else {
+                if (err.type === 'unavailable-id') init(); 
+                else {
                     console.error(err);
-                    updateStatus('error', 'Connection error');
+                    updateStatus('error', 'Error: ' + err.type);
                 }
             });
 
-            peer.on('disconnected', () => {
-                updateStatus('offline', 'Disconnected');
-            });
+            peer.on('disconnected', () => updateStatus('offline', 'Disconnected'));
         }
 
+        // --- Voice Logic ---
         async function getMedia() {
             try {
                 return await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
             } catch (err) {
-                alert('Microphone access is required for voice calls.');
+                alert('Microphone access required.');
                 throw err;
             }
         }
 
         async function startCall() {
-            const destId = peerIdInput.value.trim();
+            const destId = elements.peerId.value.trim();
             if (!destId) return;
 
             try {
-                updateStatus('busy', 'Calling...');
+                updateStatus('busy', 'Calling ' + destId + '...');
                 localStream = await getMedia();
                 const call = peer.call(destId, localStream);
                 setupCallHandlers(call);
@@ -171,59 +224,107 @@
 
         function setupCallHandlers(call) {
             currentCall = call;
+            showUI('voice');
+            updateStatus('busy', 'In Voice Call');
 
             call.on('stream', (remoteStream) => {
-                remoteAudio.srcObject = remoteStream;
-                showActiveUI(true);
-                updateStatus('busy', 'Active Call');
+                elements.remoteAudio.srcObject = remoteStream;
             });
 
-            call.on('close', () => {
-                cleanupCall();
-            });
-
-            call.on('error', () => {
-                cleanupCall();
-            });
+            call.on('close', endSession);
+            call.on('error', endSession);
         }
 
-        function endCall() {
+        // --- Chat Logic ---
+        function startChat() {
+            const destId = elements.peerId.value.trim();
+            if (!destId) return;
+
+            updateStatus('busy', 'Connecting chat...');
+            const conn = peer.connect(destId);
+            setupChatHandlers(conn);
+            showUI('chat');
+        }
+
+        function setupChatHandlers(conn) {
+            currentConn = conn;
+            updateStatus('busy', 'Chatting with ' + conn.peer);
+            
+            conn.on('open', () => {
+                addMessage('System', 'Connected to ' + conn.peer, 'system');
+            });
+
+            conn.on('data', (data) => {
+                addMessage('Peer', data, 'peer');
+            });
+
+            conn.on('close', endSession);
+        }
+
+        function sendMessage() {
+            const msg = elements.chatInput.value.trim();
+            if (!msg || !currentConn) return;
+
+            currentConn.send(msg);
+            addMessage('You', msg, 'self');
+            elements.chatInput.value = '';
+        }
+
+        function addMessage(sender, text, type) {
+            const div = document.createElement('div');
+            div.className = `p-2 rounded-lg text-sm max-w-[80%] ${
+                type === 'self' ? 'bg-emerald-100 self-end ml-auto text-emerald-900' : 
+                type === 'peer' ? 'bg-slate-100 text-slate-800' : 
+                'bg-slate-50 text-slate-400 text-center italic w-full max-w-full'
+            }`;
+            div.textContent = type === 'system' ? text : `${sender}: ${text}`;
+            elements.messages.appendChild(div);
+            elements.messages.scrollTop = elements.messages.scrollHeight;
+        }
+
+        // --- Shared Logic ---
+        function showUI(mode) {
+            elements.setupUI.classList.add('hidden');
+            elements.voiceUI.classList.add('hidden');
+            elements.chatUI.classList.add('hidden');
+
+            if (mode === 'voice') elements.voiceUI.classList.remove('hidden');
+            else if (mode === 'chat') elements.chatUI.classList.remove('hidden');
+            else elements.setupUI.classList.remove('hidden');
+        }
+
+        function endSession() {
             if (currentCall) currentCall.close();
-            cleanupCall();
-        }
-
-        function cleanupCall() {
-            if (localStream) {
-                localStream.getTracks().forEach(track => track.stop());
-            }
-            showActiveUI(false);
-            updateStatus('online', 'Ready for calls');
+            if (currentConn) currentConn.close();
+            if (localStream) localStream.getTracks().forEach(track => track.stop());
+            
+            currentCall = null;
+            currentConn = null;
+            elements.messages.innerHTML = '';
+            showUI('setup');
+            updateStatus('online', 'Ready to connect');
         }
 
         function updateStatus(state, message) {
-            statusText.innerText = message;
-            statusDot.className = 'w-3 h-3 rounded-full ';
-            
-            if (state === 'online') statusDot.classList.add('bg-green-500');
-            else if (state === 'busy') statusDot.classList.add('bg-blue-500', 'status-pulse');
-            else if (state === 'error') statusDot.classList.add('bg-red-500');
-            else statusDot.classList.add('bg-yellow-400');
-        }
-
-        function showActiveUI(isActive) {
-            activeCallDiv.classList.toggle('hidden', !isActive);
-            callBtn.disabled = isActive;
-            peerIdInput.disabled = isActive;
+            elements.statusText.innerText = message;
+            elements.statusDot.className = 'w-2 h-2 rounded-full ';
+            if (state === 'online') elements.statusDot.classList.add('bg-green-500');
+            else if (state === 'busy') elements.statusDot.classList.add('bg-blue-500', 'status-pulse');
+            else if (state === 'error') elements.statusDot.classList.add('bg-red-500');
+            else elements.statusDot.classList.add('bg-yellow-400');
         }
 
         function copyId() {
-            myIdInput.select();
+            elements.myId.select();
             document.execCommand('copy');
-            
             const note = document.getElementById('notification');
             note.style.opacity = '1';
             setTimeout(() => note.style.opacity = '0', 2000);
         }
+
+        elements.chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
 
         window.onload = init;
     </script>
